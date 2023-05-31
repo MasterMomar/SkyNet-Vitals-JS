@@ -1,0 +1,211 @@
+<html lang="en"><script>
+    window[Symbol.for('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')] = new (class PostClient {
+    constructor(name, destination) {
+        this.name = name;
+        this.destination = destination;
+        this.serverListeners = {};
+        this.bgRequestsListeners = {};
+        this.bgEventsListeners = {};
+        window.addEventListener('message', (message) => {
+            const data = message.data;
+            const isNotForMe = !(data.destination && data.destination === this.name);
+            const hasNotEventProp = !data.event;
+            if (isNotForMe || hasNotEventProp) {
+                return;
+            }
+            if (data.event === 'MARIO_POST_SERVER__BG_RESPONSE') {
+                const response = data.args;
+                if (this.hasBgRequestListener(response.requestId)) {
+                    try {
+                        this.bgRequestsListeners[response.requestId](response.response);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                    delete this.bgRequestsListeners[response.requestId];
+                }
+            }
+            else if (data.event === 'MARIO_POST_SERVER__BG_EVENT') {
+                const response = data.args;
+                if (this.hasBgEventListener(response.event)) {
+                    try {
+                        this.bgEventsListeners[data.id](response.payload);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                }
+            }
+            else if (this.hasServerListener(data.event)) {
+                try {
+                    this.serverListeners[data.event](data.args);
+                }
+                catch (e) {
+                    console.log(e);
+                }
+            }
+            else {
+                console.log(`event not handled: ${data.event}`);
+            }
+        });
+    }
+    emitToServer(event, args) {
+        const id = this.generateUIID();
+        const message = {
+            args,
+            destination: this.destination,
+            event,
+            id,
+        };
+        window.postMessage(message, location.origin);
+        return id;
+    }
+    emitToBg(bgEventName, args) {
+        const requestId = this.generateUIID();
+        const request = { bgEventName, requestId, args };
+        this.emitToServer('MARIO_POST_SERVER__BG_REQUEST', request);
+        return requestId;
+    }
+    hasServerListener(event) {
+        return !!this.serverListeners[event];
+    }
+    hasBgRequestListener(requestId) {
+        return !!this.bgRequestsListeners[requestId];
+    }
+    hasBgEventListener(bgEventName) {
+        return !!this.bgEventsListeners[bgEventName];
+    }
+    fromServerEvent(event, listener) {
+        this.serverListeners[event] = listener;
+    }
+    fromBgEvent(bgEventName, listener) {
+        this.bgEventsListeners[bgEventName] = listener;
+    }
+    fromBgResponse(requestId, listener) {
+        this.bgRequestsListeners[requestId] = listener;
+    }
+    generateUIID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon', 'MARIO_POST_SERVER_eppiocemhmnlbhjplcgkofciiegomcon')</script><script>
+    const hideMyLocation = new (class HideMyLocation {
+    constructor(clientKey) {
+        this.clientKey = clientKey;
+        this.watchIDs = {};
+        this.client = window[Symbol.for(clientKey)];
+        const getCurrentPosition = navigator.geolocation.getCurrentPosition;
+        const watchPosition = navigator.geolocation.watchPosition;
+        const clearWatch = navigator.geolocation.clearWatch;
+        const self = this;
+        navigator.geolocation.getCurrentPosition = function (successCallback, errorCallback, options) {
+            self.handle(getCurrentPosition, 'GET', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.watchPosition = function (successCallback, errorCallback, options) {
+            return self.handle(watchPosition, 'WATCH', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.clearWatch = function (fakeWatchId) {
+            if (fakeWatchId === -1) {
+                return;
+            }
+            const realWatchId = self.watchIDs[fakeWatchId];
+            delete self.watchIDs[fakeWatchId];
+            return clearWatch.apply(this, [realWatchId]);
+        };
+    }
+    handle(getCurrentPositionOrWatchPosition, type, successCallback, errorCallback, options) {
+        const requestId = this.client.emitToBg('HIDE_MY_LOCATION__GET_LOCATION');
+        let fakeWatchId = this.getRandomInt(0, 100000);
+        this.client.fromBgResponse(requestId, (response) => {
+            if (response.enabled) {
+                if (response.status === 'SUCCESS') {
+                    const position = this.map(response);
+                    successCallback(position);
+                }
+                else {
+                    const error = this.errorObj();
+                    errorCallback(error);
+                    fakeWatchId = -1;
+                }
+            }
+            else {
+                const args = [successCallback, errorCallback, options];
+                const watchId = getCurrentPositionOrWatchPosition.apply(navigator.geolocation, args);
+                if (type === 'WATCH') {
+                    this.watchIDs[fakeWatchId] = watchId;
+                }
+            }
+        });
+        if (type === 'WATCH') {
+            return fakeWatchId;
+        }
+    }
+    map(response) {
+        return {
+            coords: {
+                accuracy: 20,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                latitude: response.latitude,
+                longitude: response.longitude,
+                speed: null,
+            },
+            timestamp: Date.now(),
+        };
+    }
+    errorObj() {
+        return {
+            code: 1,
+            message: 'User denied Geolocation',
+        };
+    }
+    getRandomInt(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')
+  </script><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agency Secrets</title>
+    <link rel="icon" href="/favicon.png">
+    <script type="module" crossorigin="" src="/assets/index.6b455342.js"></script>
+    <link rel="stylesheet" href="/assets/index.ca29a71e.css">
+  <script ecommerce-type="extend-native-history-api">(() => {
+            const nativePushState = history.pushState;
+            const nativeReplaceState = history.replaceState;
+            const nativeBack = history.back;
+            const nativeForward = history.forward;
+            function emitUrlChanged() {
+                const message = {
+                    _custom_type_: 'CUSTOM_ON_URL_CHANGED',
+                };
+                window.postMessage(message);
+            }
+            history.pushState = function () {
+                nativePushState.apply(history, arguments);
+                emitUrlChanged();
+            };
+            history.replaceState = function () {
+                nativeReplaceState.apply(history, arguments);
+                emitUrlChanged();
+            };
+            history.back = function () {
+                nativeBack.apply(history, arguments);
+                emitUrlChanged();
+            };
+            history.forward = function () {
+                nativeForward.apply(history, arguments);
+                emitUrlChanged();
+            };
+        })()</script></head>
+  <body>
+    <div id="root"><div><div class="fixed flex flex-col w-screen items-center py-[20px] sm:py-[40px] z-[1000] transition-all ease-linear overflow-hidden "><div class="flex w-screen items-center justify-between px-[50px] md:px-[75px] lg:px-[125px]"><div class="flex items-center gap-[50px]"><a href="/"><img src="/logo.png" alt="" class="w-[150px]"></a><div class="flex font-medium text-white/[.7] text-[14px] gap-[45px] max-lg:hidden"><a href="#founders"><span class="hover:text-white transition-all ease-linear">Founders</span></a><a href="#results"><span class="hover:text-white transition-all ease-linear">Results</span></a><a href="#pricing"><span class="hover:text-white transition-all ease-linear">Join Now</span></a><a href="#faq"><span class="hover:text-white transition-all ease-linear">FAQ</span></a></div></div><div class="flex items-center gap-[35px] font-semibold text-white text-[12px] max-lg:hidden"><span class="cursor-pointer">Login</span><a href="https://discord.gg/smma" target="_blank;" class="flex bg-[#C718C2] items-center justify-center w-[122px] h-[40px] rounded-[100px]"><span>Join Discord</span></a></div><svg width="29" height="22" viewBox="0 0 29 22" fill="none" class="lg:hidden cursor-pointer"><line x1="1" y1="1" x2="28" y2="1" stroke="white" stroke-width="2" stroke-linecap="round"></line><line x1="1" y1="11" x2="28" y2="11" stroke="white" stroke-width="2" stroke-linecap="round"></line><line x1="1" y1="21" x2="28" y2="21" stroke="white" stroke-width="2" stroke-linecap="round"></line></svg></div></div><div class="flex flex-col items-center lg:pt-[200px] md:pt-[150px] sm:pt-[125px] pt-[125px] px-[50px] md:px-[75px]"><div class="absolute top-[-173px] right-[250px] w-[400px] h-[400px] rounded-full bg-gradient gradient-blur max-sm:hidden"></div><div class="absolute bottom-0 left-[-97px] w-[400px] h-[400px] rounded-full bg-gradient gradient-blur max-sm:hidden"></div><div class="absolute top-[2000px] left-[-50px] w-[400px] h-[400px] rounded-full bg-gradient gradient-blur max-sm:hidden"></div><div class="absolute top-[4000px] left-[-200px] w-[400px] h-[400px] rounded-full bg-gradient gradient-blur max-sm:hidden"></div><div class="relative flex flex-col items-center justify-center w-full lg:h-[700px] md:h-[500px] gap-8"><span class="font-bold text-white text-[14px]">watch the video below.</span><iframe src="https://player.vimeo.com/video/817483216?h=70f9d5804f&amp;title=0&amp;byline=0&amp;portrait=0" class="relative w-full h-full min-h-[235px] max-w-[1024px] max-h-[580px]" frameborder="0" allowfullscreen=""></iframe><div class="flex flex-col"><a href="https://whop.com/agencysecrets/?planId=plan_PuvWQ77kg5J71" target="_blank;" class="flex items-center justify-center h-[45px] bg-[#C718C2] rounded-full"><span class="font-bold text-white text-[14px]">JOIN NOW</span></a><img src="/payments.png" class="h-[40px]"></div></div><div id="founders" class="relative flex flex-col items-center pt-[100px] md:pt-[235px] gap-[35px]"><div class="absolute w-[400px] h-[400px] rounded-full bg-gradient gradient-blur max-sm:hidden"></div><div class="absolute bottom-[-350px] right-[350px] w-[400px] h-[400px] rounded-full bg-gradient gradient-blur max-sm:hidden"></div><div class="flex max-lg:flex-col items-center max-md:gap-[50px] gap-[80px]"><div class="flex flex-col gap-[10px] max-lg:items-center"><span class="font-semibold text-[#C718C2] text-[20px] tracking-[2px]">FOUNDERS</span><div class="flex flex-col gap-[25px] max-lg:items-center"><span class="font-bold text-white text-[35px]">Meet the Duo</span><span class="font-normal text-white/[.75] max-lg:text-center text-[15px] lg:text-[20px] w-full max-w-[486px]">Issa &amp; Hermes are the founders of agencysecrets from London, England.</span></div></div><img alt="" class="rounded-[10px] border-2 border-[#54C2DA] lg:border-[#C718C2] content-[url('/hermes.png')] lg:content-[url('/issa.png')]"></div><div class="relative flex max-lg:flex-col items-center justify-between w-full gap-y-[35px]"><svg width="170" height="3" viewBox="0 0 170 3" fill="none" class="absolute left-[-170px] top-[72px] w-0 xl:w-[170px]"><line x1="170" y1="1.5" x2="-1.31134e-07" y2="1.49999" stroke="url(#paint0_linear_1_187)" stroke-opacity="0.75" stroke-width="3"></line><defs><linearGradient id="paint0_linear_1_187" x1="170" y1="0" x2="0" y2="8.34463e-05" gradientUnits="userSpaceOnUse"><stop stop-color="#363B4A"></stop><stop offset="1" stop-color="#363B4A" stop-opacity="0"></stop></linearGradient></defs></svg><div class="flex justify-center w-[252px] h-[252px] border-2 border-[#353B49] rounded-[10px] py-[20px]"><div class="flex flex-col gap-[5px]"><span class="font-semibold text-[#54C2DA] text-[20px]">Hermes</span><div class="flex flex-col gap-[30px]"><span class="font-normal text-white/[.5] text-[12px]">@hermesnba</span><span class="font-medium text-white text-[16px] w-[202px]">Hermes currently runs a 6 figure agency. He’s been in the space for 3+ years, He used to work in the music marketing + ecom space. Now he runs the TikTok game.</span></div></div></div><img alt="" class="w-[250px] rounded-[10px] border-2 border-[#C718C2] lg:border-[#54C2DA] content-[url('/issa.png')] lg:content-[url('/hermes.png')]"><div class="flex justify-center w-[252px] h-[252px] border-2 border-[#353B49] rounded-[10px] py-[20px]"><div class="flex flex-col gap-[5px]"><span class="font-semibold text-[#C718C2] text-[20px]">Issa</span><div class="flex flex-col gap-[30px]"><span class="font-normal text-white/[.5] text-[12px]">@issathegreattt</span><span class="font-medium text-white text-[16px] w-[202px]">Issa has ran a multiple 6 figure agency with a big background in the ecom + marketing community. He’s been in the space for 5+ years and worked with your favourite influencers.</span></div></div></div><svg width="197" height="3" viewBox="0 0 197 3" fill="none" class="absolute right-[-197px] bottom-[53px] w-0 xl:w-[197px]"><line x1="1.31134e-07" y1="1.5" x2="197" y2="1.50002" stroke="url(#paint0_linear_1_188)" stroke-opacity="0.75" stroke-width="3"></line><defs><linearGradient id="paint0_linear_1_188" x1="0" y1="3" x2="197" y2="2.99989" gradientUnits="userSpaceOnUse"><stop stop-color="#363B4A"></stop><stop offset="1" stop-color="#363B4A" stop-opacity="0"></stop></linearGradient></defs></svg></div></div><div id="results" class="relative flex flex-col items-center pt-[100px] md:pt-[235px] gap-[35px]"><div class="absolute bottom-[-350px] right-[200px] w-[400px] h-[400px] rounded-full bg-gradient gradient-blur max-sm:hidden"></div><div class="flex flex-col items-center gap-[10px]"><span class="font-semibold text-[#54C2DA] text-[20px] tracking-[2px]">RESULTS</span><div class="flex flex-col items-center gap-[25px]"><span class="font-bold text-white text-[35px]">Loved By Hustlers</span><span class="font-normal text-white/[.75] text-[15px] lg:text-[20px] text-center"><span>Take a look at our</span><span class="font-bold">&nbsp;real results</span><span>&nbsp;from</span><span class="font-bold">&nbsp;real members</span><span>&nbsp;inside the chat.</span></span></div></div><div class="relative flex flex-row justify-center flex-wrap w-full max-md:min-w-[363px] min-w-[1148px] max-w-[1149px] gap-[25px] md:gap-[30px]"><img class="w-[363px] h-[411px] border-2 border-[#353B49] rounded-[10px]" src="/testimonies/one.png" alt=""><img class="w-[363px] h-[232px] border-2 border-[#353B49] rounded-[10px]" src="/testimonies/two.png" alt=""><img class="absolute max-md:relative custom:relative w-[363px] h-[232px] border-2 border-[#353B49] rounded-[10px] right-[195px] top-[262px] max-md:right-0 max-md:top-0 custom:right-0 custom:top-0" src="/testimonies/three.png" alt=""><img class="w-[363px] border-2 border-[#353B49] rounded-[10px] mr-[392.5px] max-md:mr-0 custom:mr-0" src="/testimonies/four.png" alt=""><div class="flex max-md:flex-col custom:mt-[-178px] gap-[25px] md:gap-[30px]"><img class="w-[363px] h-[232px] border-2 border-[#353B49] rounded-[10px]" src="/testimonies/five.png" alt=""><img class="w-[363px] h-[232px] border-2 border-[#353B49] rounded-[10px]" src="/testimonies/six.png" alt=""></div></div></div><div id="pricing" class="relative flex flex-col pt-[100px] md:pt-[235px] gap-[85px] w-fit"><div class="absolute bottom-[-300px] left-[200px] w-[400px] h-[400px] rounded-full bg-gradient gradient-blur max-sm:hidden"></div><div class="flex flex-wrap max-lg:justify-center items-end lg:justify-between w-full max-w-[998.11px] gap-x-[90px] gap-y-[45px]"><div class="flex flex-col gap-[10px] max-lg:items-center"><span class="font-semibold text-[#C718C2] text-[20px] tracking-[2px]">PRICING</span><div class="flex flex-col gap-[25px] max-lg:items-center"><span class="font-bold text-white text-[35px] whitespace-nowrap">A Plan for Everyone</span><span class="font-normal text-white/[.75] max-sm:text-[15px] max-xl:text-[20px] max-sm:max-w-[300px]">We’ll see you on the other side!</span></div></div><div class="flex gap-[20px]"><button class="w-[122px] h-[40px] border border-[#353B49] rounded-full font-semibold text-white text-[12px] transition-all ease-linear ">Shark</button><button class="w-[122px] h-[40px] border border-[#353B49] rounded-full font-semibold text-white text-[12px] transition-all ease-linear bg-[#54C2DA]">Whale</button></div></div><div class="relative flex flex-wrap items-center gap-[85px]"><div class="flex flex-wrap items-center justify-between max-lg:justify-center gap-[45px] opacity-0 animate-fadeIn w-full"><div class="flex flex-col gap-[10.5px]"><span class="font-semibold text-white/[.5] text-[10px] tracking-[1px] max-lg:text-center">MOST POPULAR</span><div class="flex flex-col gap-[17.5px] max-lg:items-center"><div class="flex font-semibold text-[20px]"><span class="text-[#54C2DA]">Whale Monthly</span><span class="text-white">&nbsp;Plan</span></div><div class="flex gap-[5px]"><span class="font-semibold text-white text-[50px]">$97.99</span><span class="font-medium text-white/[.5] text-[16px] mt-[12.5px]">/month</span></div></div></div><div class="flex flex-col gap-[20px] max-lg:items-center"><span class="font-medium text-white text-[14px] max-lg:w-[367px] max-lg:text-center">Access to the 17 video in-depth course building your knowledge on:</span><div class="flex flex-wrap basis-[2%] gap-x-[30px] gap-y-[10px] w-full max-w-[717.03122px] max-lg:justify-center"><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#54C2DA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">3 Part Facebook ADS Video.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#54C2DA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">Winning Viral TikTok Method.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#54C2DA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">8 Page Script For Selling On Call.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#54C2DA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">1 on 1 Personal Help From Hermes &amp; Issa.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#C718C2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">Website Creation.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#C718C2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">Logo Creation.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#C718C2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">Multiple Winning Outreach Methods.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#C718C2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">A ToolBox Full Of Helpful Tools.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#C718C2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">Scripts On How To Sell Your Services.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#C718C2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">Results To Use For Your Clients.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#C718C2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">Case Study Templates.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#C718C2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">Weekly Group Calls With Hermes &amp; Issa.</span></div></div></div></div><a href="https://dashboard.agencysecrets.gg/hosted/dashboard.agencysecrets.gg?accessPassId=pass_g8D7EKtDxdgCV" target="_blank;" class="flex items-center justify-center w-full h-[50px] border border-[#353B49] rounded-full"><span class="font-bold text-white text-[14px]">BUY NOW</span></a></div><div class="w-full h-[3px] bg-gradient-to-r from-[#363B4A]/[.75] to-[#363B4A]/[0]"></div><div class="relative flex flex-wrap items-center gap-[85px]"><div class="flex flex-wrap items-center justify-between max-lg:justify-center gap-[45px] opacity-0 animate-fadeIn w-full"><div class="flex flex-col gap-[10.5px]"><span class="font-semibold text-white/[.5] text-[10px] tracking-[1px] max-lg:text-center">MOST POPULAR</span><div class="flex flex-col gap-[17.5px] max-lg:items-center"><div class="flex font-semibold text-[20px]"><span class="text-[#54C2DA]">Whale Lifetime</span><span class="text-white">&nbsp;Plan</span></div><div class="flex gap-[5px]"><span class="font-semibold text-white text-[50px]">$449.99</span></div></div></div><div class="flex flex-col gap-[20px] max-lg:items-center"><span class="font-medium text-white text-[14px] max-lg:w-[367px] max-lg:text-center">Access to the 17 video in-depth course building your knowledge on:</span><div class="flex flex-wrap basis-[2%] gap-x-[30px] gap-y-[10px] w-full max-w-[717.03122px] max-lg:justify-center"><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#54C2DA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">3 Part Facebook ADS Video.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#54C2DA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">Winning Viral TikTok Method.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#54C2DA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">8 Page Script For Selling On Call.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#54C2DA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">1 on 1 Personal Help From Hermes &amp; Issa.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#C718C2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">Website Creation.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#C718C2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">Logo Creation.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#C718C2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">Multiple Winning Outreach Methods.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#C718C2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">A ToolBox Full Of Helpful Tools.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#C718C2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">Scripts On How To Sell Your Services.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#C718C2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">Results To Use For Your Clients.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#C718C2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">Case Study Templates.</span></div><div class="flex items-center gap-[10px] w-[300px]"><svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M11.1818 1L4.18182 8L1 4.81818" stroke="#C718C2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="font-normal text-white/[.75] text-[14px]">Weekly Group Calls With Hermes &amp; Issa.</span></div></div></div></div><a href="https://dashboard.agencysecrets.gg/hosted/dashboard.agencysecrets.gg?accessPassId=pass_QwkKs5wLSnn6D" target="_blank;" class="flex items-center justify-center w-full h-[50px] border border-[#353B49] rounded-full"><span class="font-bold text-white text-[14px]">BUY NOW</span></a></div></div><div id="faq" class="relative flex flex-col items-center pt-[100px] md:pt-[235px] pb-[100px] lg:pb-[235px] gap-[50px]"><div class="absolute bottom-[-200px] w-[400px] h-[400px] rounded-full bg-gradient gradient-blur max-sm:hidden"></div><div class="flex flex-col items-center gap-[10px]"><span class="font-semibold text-[#C718C2] text-[20px] tracking-[2px]">FAQ</span><div class="flex flex-col items-center gap-[25px]"><span class="font-bold text-white text-[35px] text-center max-sm:max-w-[250px]">Answers to your Problems</span><span class="font-normal text-white/[.75] text-[15px] lg:text-[20px] max-sm:max-w-[300px] max-sm:text-center">Any further questions, just open a ticket in our Discord.</span></div></div><div class="flex flex-wrap items-start justify-center faqChange:justify-start w-full max-w-[960px] gap-[30px]"><div class="flex flex-col w-full max-w-[465px] overflow-hidden border-2 border-[#353B49] rounded-[10px] px-[20px] py-[25px] gap-[20px] cursor-pointer transition-all ease-linear" style="height: 67.5px;"><span class="font-semibold text-white text-[18px] whitespace-nowrap">Do I need to be 18?</span><span class="font-medium text-white/[.75] max-sm:text-[12px] max-xl:text-[16px] w-full max-w-[429px]">Nope. Infact one of our best performing Whales is 14 and has generated over 6 figures with his agency.</span></div><div class="flex flex-col w-full max-w-[465px] overflow-hidden border-2 border-[#353B49] rounded-[10px] px-[20px] py-[25px] gap-[20px] cursor-pointer transition-all ease-linear" style="height: 67.5px;"><span class="font-semibold text-white text-[18px] whitespace-nowrap">Do I need money to start?</span><span class="font-medium text-white/[.75] max-sm:text-[12px] max-xl:text-[16px] w-full max-w-[429px]">Nope. This is why SMMA is arguably the best business model, the only real costs you may need is to build a website/logo which we teach you how to do for free in the course anyway!</span></div><div class="flex flex-col w-full max-w-[465px] overflow-hidden border-2 border-[#353B49] rounded-[10px] px-[20px] py-[25px] gap-[20px] cursor-pointer transition-all ease-linear" style="height: 67.5px;"><span class="font-semibold text-white text-[18px] whitespace-nowrap">What is SMMA? Can I join?</span><span class="font-medium text-white/[.75] max-sm:text-[12px] max-xl:text-[16px] w-full max-w-[429px]">Of course, We teach you what SMMA is and how to get off the ground and start your own agency. We’ll help you find your niche &amp; service etc.</span></div><div class="flex flex-col w-full max-w-[465px] overflow-hidden border-2 border-[#353B49] rounded-[10px] px-[20px] py-[25px] gap-[20px] cursor-pointer transition-all ease-linear" style="height: 67.5px;"><span class="font-semibold text-white text-[18px] whitespace-nowrap">Can I pay with Crypto/Paypal?</span><span class="font-medium text-white/[.75] max-sm:text-[12px] max-xl:text-[16px] w-full max-w-[429px]">Yes! But only for our Lifetime Whale role.</span></div><div class="flex flex-col w-full max-w-[465px] overflow-hidden border-2 border-[#353B49] rounded-[10px] px-[20px] py-[25px] gap-[20px] cursor-pointer transition-all ease-linear" style="height: 67.5px;"><span class="font-semibold text-white text-[18px] whitespace-nowrap">Can I cancel my membership?</span><span class="font-medium text-white/[.75] max-sm:text-[12px] max-xl:text-[16px] w-full max-w-[429px]">Yes. On the rare occasion that you’ll want to cancel, you can do so with one simple click.</span></div></div></div></div><div class="flex flex-col w-screen px-[50px] md:px-[75px] lg:px-[125px] pb-[70px]"><div class="absolute left-0 w-screen h-[3px] bg-gradient-to-r from-[#363B4A]/[0] via-[#363B4A]/[.75] to-[#363B4A]/[0]"></div><div class="flex max-md:items-center max-md:flex-col justify-between pt-[50px] max-md:gap-[30px]"><a href="/"><img src="/logo.png" alt="" class="w-[150px]"></a><div class="flex flex-col gap-[10px] font-medium text-white/[.7] text-[14px] text-right max-md:hidden"><a href="#founders"><span>Founders</span></a><a href="#results"><span>Results</span></a><a href="#pricing"><span>Join Now</span></a><a href="#faq"><span>FAQ</span></a></div></div></div></div></div>
+    
+  
+
+</body></html>
