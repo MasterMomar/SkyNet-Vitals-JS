@@ -1,4 +1,9 @@
-# Plyer
+# SkyNet Biometrics + Plyer Metrics
+SkyNet Security is an I.T admin software which secures and Encrypts Medical Vital Signs, Geographical Locations and Biometrics.
+It is being combined with Plyer for a physics aspect in computer science and the for Physics Encryption or Cryptology.
+Combined = Aerospace Biometrics.
+
+![logo](https://github.com/MasterMomar/SkyNet-Vitals-JS/assets/132151222/2472af62-8969-461d-a452-06950b972709)
 
 Plyer is a platform-independent api to use features commonly found on various
 platforms, notably mobile ones, in Python.
